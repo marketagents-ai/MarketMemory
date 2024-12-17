@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  model-inference:
+    image: ghcr.io/huggingface/text-embeddings-inference:1.5
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: ["gpu"]
+              # device_ids: ["2"]
+    environment:
+      HF_API_TOKEN: ${HF_API_TOKEN}
+      MODEL_ID: "jinaai/jina-embeddings-v2-base-en"
+    volumes:
+      - /ephemeral/huggingface:/root/.cache/huggingface
+    ports:
+      - "8080:80"
+    restart: always
