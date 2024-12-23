@@ -53,20 +53,21 @@ class DatabaseConnection:
     def _init_tables(self):
         self.cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
         
-        # Documents table
-        self.cursor.execute(f"""
-            CREATE TABLE IF NOT EXISTS documents (
-                id SERIAL PRIMARY KEY,
+        # Knowledge objects table
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS knowledge_objects (
+                knowledge_id UUID PRIMARY KEY,
                 content TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                metadata JSONB DEFAULT '{}'::jsonb
             );
         """)
 
-        # Chunks table (for ingested documents)
+        # Knowledge chunks table
         self.cursor.execute(f"""
-            CREATE TABLE IF NOT EXISTS document_chunks (
+            CREATE TABLE IF NOT EXISTS knowledge_chunks (
                 id SERIAL PRIMARY KEY,
-                document_id INTEGER REFERENCES documents(id),
+                knowledge_id UUID REFERENCES knowledge_objects(knowledge_id),
                 text TEXT,
                 start_pos INTEGER,
                 end_pos INTEGER,
@@ -75,26 +76,26 @@ class DatabaseConnection:
             );
         """)
 
-        # Agent memory table (procedural/episodic memory)
+        # Agent memory table
         self.cursor.execute(f"""
             CREATE TABLE IF NOT EXISTS agent_memory (
-                id SERIAL PRIMARY KEY,
+                memory_id UUID PRIMARY KEY,
                 agent_id TEXT,
-                cognitive_step TEXT, -- perception, action, observation, reflection
+                cognitive_step TEXT,
                 content TEXT,
                 embedding vector({self.config.vector_dim}),
-                timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                metadata JSONB DEFAULT '{{}}'::jsonb
             );
         """)
 
-        # Vector index for chunks
+        # Vector indices
         self.cursor.execute(f"""
-            CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx 
-            ON document_chunks USING ivfflat (embedding vector_cosine_ops)
+            CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_idx 
+            ON knowledge_chunks USING ivfflat (embedding vector_cosine_ops)
             WITH (lists = {self.config.lists});
         """)
 
-        # Vector index for agent_memory
         self.cursor.execute(f"""
             CREATE INDEX IF NOT EXISTS agent_memory_embedding_idx 
             ON agent_memory USING ivfflat (embedding vector_cosine_ops)
