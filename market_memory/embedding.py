@@ -41,8 +41,12 @@ class MemoryEmbedder:
 
 if __name__ == "__main__":
     # test run for embedding
+    import os
     from config import load_config_from_yaml
-    config = load_config_from_yaml("memory_config.yaml")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(current_dir, "memory_config.yaml")
+
+    config = load_config_from_yaml(config_path)
     embedder = MemoryEmbedder(config)
     emb = embedder.get_embeddings("This is a test sentence for embedding.")
     print("Embedding:", emb)
