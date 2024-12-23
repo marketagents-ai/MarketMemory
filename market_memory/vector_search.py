@@ -6,7 +6,7 @@ class RetrievedMemory(BaseModel):
     similarity: float
     context: str = ""
 
-class MemoryRetrieval:
+class MemoryRetriever:
     """
     MemoryQuery provides methods to search stored documents or agent memories based on embedding similarity.
     """
@@ -16,7 +16,7 @@ class MemoryRetrieval:
         self.embedding_service = embedding_service
         self.full_text = ""
 
-    def search_documents(self, query: str, top_k: int = None) -> List[RetrievedMemory]:
+    def search_knowledge_base(self, query: str, top_k: int = None) -> List[RetrievedMemory]:
         self.db.connect()
         query_embedding = self.embedding_service.get_embeddings(query)
         top_k = top_k or self.config.top_k
@@ -24,10 +24,10 @@ class MemoryRetrieval:
         self.db.cursor.execute("""
             WITH ranked_chunks AS (
                 SELECT DISTINCT ON (c.text)
-                    c.id, c.text, c.start_pos, c.end_pos, d.content,
+                    c.id, c.text, c.start_pos, c.end_pos, k.content,
                     (1 - (c.embedding <=> %s::vector)) AS similarity
-                FROM document_chunks c
-                JOIN documents d ON c.document_id = d.id
+                FROM knowledge_chunks c
+                JOIN knowledge_objects k ON c.knowledge_id = k.knowledge_id
                 WHERE (1 - (c.embedding <=> %s::vector)) >= %s
                 ORDER BY c.text, similarity DESC
             )
@@ -79,18 +79,22 @@ class MemoryRetrieval:
         return context
 
 if __name__ == "__main__":
+    import os
     from config import load_config_from_yaml
     from setup_db import DatabaseConnection
     from embedding import MemoryEmbedder
-    from document_processor import DocumentProcessor
+    from knowledge_base import MarketKnowledgeBase
     from memory import MarketMemory, MemoryObject
 
-    config = load_config_from_yaml("memory_config.yaml")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(current_dir, "memory_config.yaml")
+
+    config = load_config_from_yaml(config_path)
     db_conn = DatabaseConnection(config)
     embedder = MemoryEmbedder(config)
     
     # Store some test documents first
-    doc_processor = DocumentProcessor(config, db_conn, embedder)
+    knowledge_base = MarketKnowledgeBase(config, db_conn, embedder)
     test_doc = """
     Q4 2023 Quarterly Earnings Report
     
@@ -99,7 +103,7 @@ if __name__ == "__main__":
     Strong performance in cloud services division.
     Earnings per share of $1.45 exceeded analyst estimates.
     """
-    doc_processor.ingest_document(test_doc)
+    knowledge_base.ingest_knowledge(test_doc)
 
     # Store some test agent memories
     memory_store = MarketMemory(config, db_conn, embedder)
@@ -111,9 +115,9 @@ if __name__ == "__main__":
     memory_store.store_memory(test_memory)
 
     # Now perform the searches
-    retriever = MemoryRetrieval(config, db_conn, embedder)
+    retriever = MemoryRetriever(config, db_conn, embedder)
 
-    doc_results = retriever.search_documents("quarterly earnings")
+    doc_results = retriever.search_knowledge_base("quarterly earnings")
     print("\nDocument Search Results:")
     for r in doc_results:
         print(f"Text: {r.text}\nSimilarity: {r.similarity}\nContext: {r.context}\n")
